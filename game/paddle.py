@@ -4,6 +4,7 @@ class Paddle:
     def __init__(self, x, y, width, height):
         self.x = x
         self.y = y
+        self.original_y = y  # store original y position
         self.width = width
         self.height = height
         self.speed = 7
@@ -20,3 +21,7 @@ class Paddle:
             self.move(-self.speed, screen_height)
         elif ball.y > self.y + self.height:
             self.move(self.speed, screen_height)
+
+    def reset_position(self):
+        """Reset paddle to its original starting Y position."""
+        self.y = self.original_y

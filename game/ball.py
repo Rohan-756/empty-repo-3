@@ -18,12 +18,38 @@ class Ball:
         self.x += self.velocity_x
         self.y += self.velocity_y
 
+        # ADDED: Return event for wall bounce
         if self.y <= 0 or self.y + self.height >= self.screen_height:
             self.velocity_y *= -1
+            return "wall_hit" # <-- Return event
+        return None # No event
 
     def check_collision(self, player, ai):
-        if self.rect().colliderect(player.rect()) or self.rect().colliderect(ai.rect()):
-            self.velocity_x *= -1
+        ball_rect = self.rect()
+        player_rect = player.rect()
+        ai_rect = ai.rect()
+
+        # Collision with player paddle (left)
+        if ball_rect.colliderect(player_rect):
+            self.x = player_rect.right  # Move ball just outside paddle
+            self.velocity_x = abs(self.velocity_x)  # Ensure it moves right
+
+        # Add some "spin" effect based on where the ball hits the paddle
+            offset = (self.y + self.height / 2) - (player_rect.y + player_rect.height / 2)
+            self.velocity_y += offset * 0.05
+            return "paddle_hit"
+
+        # Collision with AI paddle (right)
+        elif ball_rect.colliderect(ai_rect):
+            self.x = ai_rect.left - self.width  # Move ball just outside paddle
+            self.velocity_x = -abs(self.velocity_x)  # Ensure it moves left
+
+            offset = (self.y + self.height / 2) - (ai_rect.y + ai_rect.height / 2)
+            self.velocity_y += offset * 0.05
+            return "paddle_hit"
+        
+        return None
+
 
     def reset(self):
         self.x = self.original_x
