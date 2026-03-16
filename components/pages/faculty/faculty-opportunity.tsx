@@ -247,7 +247,7 @@ export default function FacultyOpportunity() {
                                           className="w-full max-w-[140px]"
                                         >
                                           <a
-                                            href={app.resumePath.startsWith('/') ? app.resumePath : `/resumes/${app.resumePath}`}
+                                            href={`https://utfs.io/f/${app.resumePath}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                           >

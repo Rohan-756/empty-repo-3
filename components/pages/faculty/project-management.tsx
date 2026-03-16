@@ -1268,7 +1268,7 @@ Rank candidates by overall suitability score (0.0 to 1.0) and provide detailed r
                   <Label htmlFor="dueDate">Expected Completion Date</Label>
                   <Input
                     id="dueDate"
-                    type="datetime-local"
+                    type="date"
                     value={newProject.expected_completion_date}
                     onChange={(e) =>
                       setNewProject({
@@ -2328,7 +2328,7 @@ Rank candidates by overall suitability score (0.0 to 1.0) and provide detailed r
                           <td className="px-4 py-3">
                             {application.resume_path ? (
                               <a
-                                href={`/${application.resume_path}`}
+                                href={application.resume_path === 'Uploadthing' ? `https://utfs.io/f/${application.resume_id}` : `/${application.resume_path}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:text-blue-800 underline text-sm flex items-center"

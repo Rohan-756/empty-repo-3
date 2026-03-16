@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { writeFile, unlink } from 'fs/promises'
-import path from 'path'
+import { UTApi } from "uploadthing/server"
 import { prisma } from '@/lib/prisma'
 import { getUserById } from '@/lib/auth'
 
@@ -48,42 +47,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Student profile not found" }, { status: 404 })
     }
 
-    // Generate unique filename with timestamp and student ID
-    const timestamp = Date.now()
-    const fileName = `${timestamp}_${student.student_id}_resume.pdf`
-    const filePath = path.join(process.cwd(), 'public', 'Resume', fileName)
+    const utapi = new UTApi()
 
     // Delete old resume if exists
     if (student.resume_id) {
       try {
-        const oldFilePath = path.join(process.cwd(), 'public', 'Resume', student.resume_id)
-        await unlink(oldFilePath)
+        await utapi.deleteFiles(student.resume_id)
         console.log(`Deleted old resume: ${student.resume_id}`)
       } catch (error) {
         console.log(`Could not delete old resume file: ${student.resume_id}`)
       }
     }
 
-    // Save new resume file
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-    await writeFile(filePath, buffer)
+    // Save new resume file to Uploadthing
+    const response = await utapi.uploadFiles(file)
+    if (response.error) {
+      throw new Error(response.error.message)
+    }
+
+    const resumeId = response.data.key
+    const resumeUrl = response.data.url
     
     // Update student record with new resume info
     const updatedStudent = await prisma.student.update({
       where: { id: student.id },
       data: {
-        resume_id: fileName,
-        resume_path: 'Resume',
+        resume_id: resumeId,
+        resume_path: 'Uploadthing',
       },
     })
-
-    const resumeUrl = `/Resume/${fileName}`
     
     return NextResponse.json({ 
       success: true,
       resumeUrl,
-      resumeId: fileName,
+      resumeId,
       message: 'Resume uploaded successfully'
     })
   } catch (error) {
@@ -118,10 +115,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "No resume found to delete" }, { status: 404 })
     }
 
-    // Delete resume file
+    // Delete resume file from Uploadthing
+    const utapi = new UTApi()
     try {
-      const filePath = path.join(process.cwd(), 'public', 'Resume', student.resume_id)
-      await unlink(filePath)
+      await utapi.deleteFiles(student.resume_id)
       console.log(`Deleted resume file: ${student.resume_id}`)
     } catch (error) {
       console.log(`Could not delete resume file: ${student.resume_id}`)

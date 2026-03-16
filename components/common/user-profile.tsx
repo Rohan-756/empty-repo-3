@@ -138,7 +138,12 @@ export function UserProfile() {
   React.useEffect(() => {
     if (user?.profileData?.resume_id) {
       setResumeName(user.profileData.resume_id);
-      setResumeUrl(`/resumes/${user.profileData.resume_id}`);
+      if (user.profileData.resume_path === 'Uploadthing') {
+        setResumeUrl(`https://utfs.io/f/${user.profileData.resume_id}`);
+      } else {
+        const pathPrefix = user.role === 'STUDENT' ? '/Resume/' : '/resumes/';
+        setResumeUrl(`${pathPrefix}${user.profileData.resume_id}`);
+      }
     }
   }, [user]);
 

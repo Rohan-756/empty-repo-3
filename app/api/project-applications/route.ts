@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getUserById } from "@/lib/auth"
-import { writeFile, mkdir } from "fs/promises"
-import path from "path"
-import { v4 as uuidv4 } from "uuid"
+import { UTApi } from "uploadthing/server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,25 +83,15 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Create unique directory for this project applications
-    const projectDir = path.join(process.cwd(), "public", "project-applications", project_id)
-    
-    try {
-      await mkdir(projectDir, { recursive: true })
-    } catch (error) {
-      // Directory might already exist, that's okay
+    // Upload resume using Uploadthing
+    const utapi = new UTApi();
+    const response = await utapi.uploadFiles(resume);
+    if (response.error) {
+      throw new Error(response.error.message);
     }
 
-    // Generate unique filename
-    const resumeId = uuidv4()
-    const fileExtension = path.extname(resume.name)
-    const fileName = `${student.student_id}_${resumeId}${fileExtension}`
-    const filePath = path.join(projectDir, fileName)
-    
-    // Save the file
-    const bytes = await resume.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    await writeFile(filePath, buffer)
+    const resumeId = response.data.key;
+    const fileName = resume.name;
 
     // Create project request with resume information
     const projectRequest = await prisma.projectRequest.create({
@@ -115,7 +103,7 @@ export async function POST(request: NextRequest) {
         status: "PENDING",
         student_notes: student_notes || null,
         resume_id: resumeId,
-        resume_path: `project-applications/${project_id}/${fileName}`,
+        resume_path: 'Uploadthing', // Specify that it's using Uploadthing
       },
       include: {
         project: true,
