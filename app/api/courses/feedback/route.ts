@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    const usedFeedbackIds = new Set(latestSummary?.feedbacks.map((f: { id: string }) => f.id) || []);
+    const usedFeedbackIds = new Set(latestSummary?.feedbacks?.map((f: { id: string }) => f.id) || []);
 
     const feedbacks = await prisma.courseFeedback.findMany({
       where: {
@@ -64,6 +64,28 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Also fetch all suggestions for this unit (publicly visible ideas for next session)
+    const allSuggestions = await prisma.courseFeedback.findMany({
+      where: {
+        course_id: courseId,
+        ...(unitId && unitId !== "all" ? { unit_id: unitId } : {}),
+        NOT: { suggestions: null },
+        suggestions: { not: "" }
+      },
+      select: {
+        id: true,
+        suggestions: true,
+        created_at: true,
+        student: {
+          select: {
+            user: {
+              select: { name: true }
+            }
+          }
+        }
+      }
+    })
+
     // Process feedbacks to add "is_used" flag and sort unused ones to the top
     const processedFeedbacks = feedbacks.map((f: any) => ({
       ...f,
@@ -75,6 +97,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ 
       feedbacks: processedFeedbacks,
+      allSuggestions, // Return suggestions separately so they can be shown to everyone
       latestSummary: latestSummary ? {
         summary: latestSummary.summary,
         sentiment: latestSummary.sentiment,
@@ -101,7 +124,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json()
-    const { courseId, unitId, rating, comment } = data
+    const { courseId, unitId, rating, comment, suggestions } = data
 
     if (!courseId || !unitId || rating === undefined || rating === null || !comment) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -130,6 +153,7 @@ export async function POST(request: NextRequest) {
       update: {
         rating,
         comment,
+        suggestions,
         updated_at: new Date()
       },
       create: {
@@ -137,7 +161,8 @@ export async function POST(request: NextRequest) {
         student_id: studentId,
         unit_id: unitId,
         rating,
-        comment
+        comment,
+        suggestions
       }
     })
 
@@ -146,7 +171,17 @@ export async function POST(request: NextRequest) {
       feedback 
     })
   } catch (error) {
-    console.error("Post feedback error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Post feedback error details:", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+      data: { 
+        courseId: request.headers.get("x-course-id"), // Just for logging if available
+        userId: request.headers.get("x-user-id")
+      }
+    })
+    return NextResponse.json({ 
+      error: "Internal server error", 
+      details: error instanceof Error ? error.message : "Unknown error" 
+    }, { status: 500 })
   }
 }

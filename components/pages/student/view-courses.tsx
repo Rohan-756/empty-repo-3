@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { BookOpen, Calendar, UserPlus, Trash2, RefreshCw, List, Clock, FileText, Search, Filter, MessageSquare, Star } from "lucide-react"
+import { BookOpen, Calendar, UserPlus, Trash2, RefreshCw, List, Clock, FileText, Search, Filter, MessageSquare, Star, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
@@ -70,7 +70,11 @@ export function ViewCourses() {
   const [feedbackUnitId, setFeedbackUnitId] = useState<string>("")
   const [feedbackRating, setFeedbackRating] = useState(5)
   const [feedbackComment, setFeedbackComment] = useState("")
+  const [feedbackSuggestions, setFeedbackSuggestions] = useState("")
   const [submittingFeedback, setSubmittingFeedback] = useState(false)
+  const [courseFeedbacks, setCourseFeedbacks] = useState<any[]>([])
+  const [allSuggestions, setAllSuggestions] = useState<any[]>([])
+  const [isFeedbacksLoading, setIsFeedbacksLoading] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -143,10 +147,57 @@ export function ViewCourses() {
     e.stopPropagation()
     setFeedbackCourse(course)
     setFeedbackUnitId(unitId)
+    
+    // Reset form defaults
     setFeedbackRating(5)
     setFeedbackComment("")
+    setFeedbackSuggestions("")
+    
     setIsFeedbackDialogOpen(true)
+    fetchCourseFeedbacks(course.id, unitId)
   }
+
+  const fetchCourseFeedbacks = async (courseId: string, unitId?: string) => {
+    try {
+      setIsFeedbacksLoading(true)
+      const url = unitId && unitId !== "all" 
+        ? `/api/courses/feedback?courseId=${courseId}&unitId=${unitId}`
+        : `/api/courses/feedback?courseId=${courseId}`;
+        
+      const response = await fetch(url, {
+        headers: {
+          "x-user-id": user?.id || "",
+        },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setCourseFeedbacks(data.feedbacks || [])
+        setAllSuggestions(data.allSuggestions || [])
+        // Pre-fill if we found existing feedback for this user
+        if (data.feedbacks && data.feedbacks.length > 0) {
+          const myFeedback = data.feedbacks[0]
+          setFeedbackRating(myFeedback.rating)
+          setFeedbackComment(myFeedback.comment)
+          setFeedbackSuggestions(myFeedback.suggestions || "")
+        }
+      } else {
+        throw new Error(data.error || "Failed to fetch feedbacks")
+      }
+    } catch (error) {
+      console.error("Error fetching feedbacks:", error)
+    } finally {
+      setIsFeedbacksLoading(false)
+    }
+  }
+
+  const refreshData = async () => {
+    if (!feedbackCourse) return;
+    await fetchCourseFeedbacks(feedbackCourse.id, feedbackUnitId)
+    toast({
+      title: "Refreshed",
+      description: "Latest feedback history loaded",
+    })
+  };
 
   const handleSubmitFeedback = async () => {
     if (!feedbackCourse || !user) return
@@ -163,6 +214,7 @@ export function ViewCourses() {
           unitId: feedbackUnitId,
           rating: feedbackRating,
           comment: feedbackComment,
+          suggestions: feedbackSuggestions,
         }),
       })
 
@@ -171,10 +223,13 @@ export function ViewCourses() {
           title: "Success",
           description: "Feedback submitted successfully",
         })
-        setIsFeedbackDialogOpen(false)
+        fetchCourseFeedbacks(feedbackCourse.id, feedbackUnitId)
       } else {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to submit feedback")
+        const errorMessage = errorData.details 
+          ? `${errorData.error}: ${errorData.details}` 
+          : (errorData.error || "Failed to submit feedback");
+        throw new Error(errorMessage)
       }
     } catch (error) {
       toast({
@@ -427,54 +482,198 @@ export function ViewCourses() {
 
       {/* Feedback Dialog */}
       <Dialog open={isFeedbackDialogOpen} onOpenChange={setIsFeedbackDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Unit Feedback</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-blue-600" />
+              Unit Performance & Feedback
+            </DialogTitle>
             <DialogDescription>
               Share your thoughts on <span className="font-semibold text-blue-600">Unit {feedbackCourse?.course_units?.find(u => u.id === feedbackUnitId)?.unit_number}: {feedbackCourse?.course_units?.find(u => u.id === feedbackUnitId)?.unit_name}</span>.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="rating">Rating</Label>
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Button
-                    key={star}
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="p-1 h-auto hover:bg-transparent"
-                    onClick={() => setFeedbackRating(star)}
-                  >
-                    <Star
-                      className={cn(
-                        "h-6 w-6 transition-colors",
-                        star <= feedbackRating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-                      )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+            {/* Left Column: Form */}
+            <div className="space-y-4">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Submit Your Feedback</h3>
+                
+                <div className="flex items-start gap-2 mb-4 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-lg text-[10px] text-amber-800 dark:text-amber-300">
+                  <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                  <p className="leading-tight">
+                    <span className="font-bold underline">Note:</span> New submissions <span className="font-bold italic">overwrite</span> previous ones for this unit.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3">
+                    <Label htmlFor="rating" className="text-xs font-semibold text-gray-500 uppercase">Class Rating</Label>
+                    <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-2 rounded-lg border w-fit">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Button
+                          key={star}
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="p-1 h-auto hover:bg-transparent"
+                          onClick={() => setFeedbackRating(star)}
+                        >
+                          <Star
+                            className={cn(
+                              "h-7 w-7 transition-all duration-200 transform hover:scale-110",
+                              star <= feedbackRating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                            )}
+                          />
+                        </Button>
+                      ))}
+                      <span className="ml-2 text-base font-bold text-gray-700 dark:text-white">{feedbackRating}/5</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="comment" className="text-[10px] font-semibold text-gray-500 uppercase">Your Experience</Label>
+                    <Textarea
+                      id="comment"
+                      placeholder="What did you like? What could be improved?"
+                      value={feedbackComment}
+                      onChange={(e) => setFeedbackComment(e.target.value)}
+                      rows={3}
+                      className="resize-none bg-white dark:bg-slate-900 text-xs"
                     />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="suggestions" className="text-[10px] font-semibold text-gray-500 uppercase">Suggestions for Next Session</Label>
+                    <Textarea
+                      id="suggestions"
+                      placeholder="What should be changed for the next session?"
+                      value={feedbackSuggestions}
+                      onChange={(e) => setFeedbackSuggestions(e.target.value)}
+                      rows={3}
+                      className="resize-none bg-white dark:bg-slate-900 text-xs"
+                    />
+                  </div>
+                  <Button 
+                    onClick={handleSubmitFeedback} 
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg shadow shadow-blue-200 transition-all active:scale-[0.98] h-10"
+                    disabled={submittingFeedback || !feedbackComment.trim()}
+                  >
+                    {submittingFeedback ? (
+                      <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                    )}
+                    {submittingFeedback ? "Submitting..." : "Submit Feedback"}
                   </Button>
-                ))}
-                <span className="ml-2 text-sm font-medium text-gray-600">{feedbackRating}/5</span>
+                </div>
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="comment">Comments</Label>
-              <Textarea
-                id="comment"
-                placeholder="What did you like? What could be improved?"
-                value={feedbackComment}
-                onChange={(e) => setFeedbackComment(e.target.value)}
-                rows={4}
-              />
+
+            {/* Right Column: History */}
+            <div className="space-y-6">
+              <div className="flex justify-between items-center px-1">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Your Submission</h3>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-8"
+                  onClick={refreshData}
+                  disabled={isFeedbacksLoading}
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5 mr-2", isFeedbacksLoading && "animate-spin")} />
+                  Refresh
+                </Button>
+              </div>
+
+              {/* Your Submission Card - Matching Faculty FeedbackCard style */}
+              <div className="space-y-4">
+                {isFeedbacksLoading ? (
+                  <div className="flex justify-center p-8">
+                    <RefreshCw className="h-6 w-6 animate-spin text-gray-300" />
+                  </div>
+                ) : courseFeedbacks.length === 0 ? (
+                  <div className="text-center py-10 bg-gray-50 dark:bg-slate-800/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-slate-700">
+                    <Info className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No feedback submitted yet</p>
+                  </div>
+                ) : (
+                  courseFeedbacks.map((f, idx) => (
+                    <Card key={idx} className="overflow-hidden border-slate-200 dark:border-slate-700 shadow-md">
+                      <CardHeader className="p-4 pb-2 bg-slate-50/50 dark:bg-slate-800/20">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold">
+                              {user?.name?.charAt(0) || 'U'}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                {user?.name}
+                              </p>
+                              <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                Updated on {new Date(f.updated_at || f.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="flex items-center justify-end gap-0.5 mb-1">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star 
+                                  key={s} 
+                                  className={cn(
+                                    "h-3.5 w-3.5",
+                                    s <= (f.rating || 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                                  )} 
+                                />
+                              ))}
+                            </div>
+                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 h-5 bg-white shadow-sm">
+                              ID: {f.id.slice(-4).toUpperCase()}
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-3">
+                        <p className="text-sm text-gray-700 dark:text-gray-300 italic bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800 quote">
+                          "{f.comment}"
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+
+              {/* Suggestions from all students */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="h-1 w-8 bg-blue-500 rounded-full" />
+                  <h3 className="text-[10px] font-bold text-gray-900 dark:text-white uppercase tracking-wider">Collective Session Ideas</h3>
+                </div>
+                {allSuggestions.length === 0 ? (
+                  <div className="text-center py-4 bg-slate-50/50 dark:bg-slate-800/20 rounded-lg border border-slate-100 dark:border-slate-800">
+                    <p className="text-[9px] text-gray-400 italic">No suggestions shared yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {allSuggestions.map((s, idx) => (
+                      <div key={idx} className="p-2.5 bg-blue-50/30 dark:bg-blue-900/10 border border-blue-50 dark:border-blue-900/30 rounded-lg">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400">{s.student?.user?.name || "Student"}</span>
+                          <span className="text-[8px] text-gray-400">{new Date(s.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-normal italic">
+                          "{s.suggestions}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsFeedbackDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmitFeedback} disabled={submittingFeedback || !feedbackComment.trim() || !feedbackUnitId}>
-              {submittingFeedback ? "Submitting..." : "Submit Feedback"}
+
+          <DialogFooter className="mt-8 pt-4 border-t border-slate-100">
+            <Button variant="outline" onClick={() => setIsFeedbackDialogOpen(false)} className="px-8">
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

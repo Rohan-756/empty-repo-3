@@ -618,6 +618,7 @@ model CourseFeedback {
   unit_id    String
   rating     Int      @default(5)
   comment    String
+  suggestions String?
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
   course     Course   @relation(fields: [course_id], references: [id], onDelete: Cascade)

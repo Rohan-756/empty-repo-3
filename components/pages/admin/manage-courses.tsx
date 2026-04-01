@@ -83,7 +83,7 @@ function FeedbackCard({ feedback }: { feedback: any }) {
                 )}
               </div>
               <p className="text-xs text-gray-500">
-                Enrolled Student • {new Date(feedback.created_at).toLocaleDateString()}
+                Enrolled Student • {new Date(feedback.created_at).toLocaleDateString()} at {new Date(feedback.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>
@@ -1067,6 +1067,31 @@ export function ManageCourses({ facultyOnly }: ManageCoursesProps) {
                       <div className="grid gap-4 opacity-80">
                         {courseFeedbacks.filter((f: any) => f.is_used).map((feedback: any) => (
                           <FeedbackCard key={feedback.id} feedback={feedback} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Suggestions for Next Session Section */}
+                  {courseFeedbacks.filter((f: any) => f.suggestions).length > 0 && (
+                    <div className="space-y-4 mt-8 border-t pt-6">
+                      <div className="flex items-center gap-2 px-2">
+                        <div className="p-1 bg-blue-100 dark:bg-blue-900/30 rounded">
+                          <MessageSquare className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Suggestions for Next Session</h3>
+                      </div>
+                      <div className="grid gap-4">
+                        {courseFeedbacks.filter((f: any) => f.suggestions).map((feedback: any) => (
+                          <Card key={`suggestion-${feedback.id}`} className="p-4 border-blue-100 bg-blue-50/20 dark:bg-blue-900/10 dark:border-blue-800">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="text-xs font-bold text-gray-900 dark:text-white">{feedback.student?.user?.name || "Student"}</span>
+                              <span className="text-[10px] text-gray-400">{new Date(feedback.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                            </div>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 italic whitespace-pre-wrap">
+                              "{feedback.suggestions}"
+                            </p>
+                          </Card>
                         ))}
                       </div>
                     </div>
